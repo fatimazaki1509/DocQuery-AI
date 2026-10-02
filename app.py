@@ -1,4 +1,3 @@
-```python
 import os
 import streamlit as st
 import faiss
@@ -588,4 +587,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-```
+
