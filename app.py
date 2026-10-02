@@ -1,4 +1,6 @@
 import os
+import hashlib
+
 import streamlit as st
 import faiss
 from pypdf import PdfReader
@@ -26,14 +28,12 @@ st.markdown(
     """
     <style>
 
-    /* Main container */
     .block-container {
         max-width: 900px;
         padding-top: 3rem;
         padding-bottom: 3rem;
     }
 
-    /* Header */
     .app-header {
         text-align: center;
         margin-bottom: 2.5rem;
@@ -51,7 +51,6 @@ st.markdown(
         font-size: 1rem;
     }
 
-    /* Section headings */
     .section-title {
         font-size: 0.85rem;
         font-weight: 650;
@@ -62,7 +61,6 @@ st.markdown(
         text-transform: uppercase;
     }
 
-    /* Document card */
     .document-card {
         border: 1px solid #e5e7eb;
         border-radius: 10px;
@@ -82,23 +80,26 @@ st.markdown(
         font-size: 0.85rem;
     }
 
-    /* Answer card */
-    .answer-card {
+    .message-label {
+        font-size: 0.85rem;
+        font-weight: 650;
+        color: #374151;
+        margin-bottom: 0.45rem;
+    }
+
+    .question-box {
+        background: #f9fafb;
         border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 1.2rem;
-        background: #ffffff;
-        margin-top: 0.7rem;
+        border-radius: 8px;
+        padding: 0.9rem 1rem;
         margin-bottom: 1rem;
     }
 
-    /* Divider */
     .divider {
         border-top: 1px solid #e5e7eb;
         margin: 2rem 0;
     }
 
-    /* Footer */
     .footer {
         text-align: center;
         color: #9ca3af;
@@ -106,7 +107,6 @@ st.markdown(
         margin-top: 3rem;
     }
 
-    /* Buttons */
     div.stButton > button {
         border-radius: 7px;
         font-weight: 550;
@@ -175,6 +175,9 @@ if "index" not in st.session_state:
 
 if "processed_file" not in st.session_state:
     st.session_state.processed_file = None
+
+if "document_id" not in st.session_state:
+    st.session_state.document_id = None
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -325,7 +328,13 @@ If the answer cannot be found in the context, respond exactly with:
 
 Do not make up information.
 Do not use outside knowledge.
-Keep the answer clear and concise.
+
+Answer clearly and concisely.
+
+Use simple Markdown formatting when useful, such as:
+- bullet points
+- numbered lists
+- bold text
 
 Context:
 {context}
@@ -375,10 +384,18 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
 
-    # Process only if this is a NEW document
+    # Create a unique ID from the actual PDF content.
+    # This also handles two different PDFs having the same filename.
+    file_bytes = uploaded_file.getvalue()
+
+    current_document_id = hashlib.md5(
+        file_bytes
+    ).hexdigest()
+
+    # Process only when the actual document changes.
     if (
-        st.session_state.processed_file
-        != uploaded_file.name
+        st.session_state.document_id
+        != current_document_id
     ):
 
         with st.spinner(
@@ -401,8 +418,9 @@ if uploaded_file:
         st.session_state.chunks = chunks
         st.session_state.index = index
         st.session_state.processed_file = uploaded_file.name
+        st.session_state.document_id = current_document_id
 
-        # Clear old conversation
+        # New document = new conversation
         st.session_state.messages = []
 
         st.success(
@@ -412,7 +430,7 @@ if uploaded_file:
 
 
 # =========================================================
-# SHOW DOCUMENT STATUS
+# DOCUMENT STATUS
 # =========================================================
 
 if st.session_state.processed_file:
@@ -423,6 +441,7 @@ if st.session_state.processed_file:
             <div class="document-name">
                 {st.session_state.processed_file}
             </div>
+
             <div class="document-status">
                 Document processed and ready for questions
             </div>
@@ -445,49 +464,46 @@ if st.session_state.messages:
 
     for message in st.session_state.messages:
 
+        # -----------------------------
+        # USER QUESTION
+        # -----------------------------
+
         if message["role"] == "user":
 
             st.markdown(
-                f"""
-                <div style="
-                    margin-bottom:0.4rem;
-                    font-weight:600;
-                    color:#374151;
-                ">
-                    Question
-                </div>
+                '<div class="message-label">Question</div>',
+                unsafe_allow_html=True
+            )
 
-                <div style="
-                    background:#f9fafb;
-                    border:1px solid #e5e7eb;
-                    border-radius:8px;
-                    padding:0.9rem 1rem;
-                    margin-bottom:1rem;
-                ">
+            st.markdown(
+                f"""
+                <div class="question-box">
                     {message["content"]}
                 </div>
                 """,
                 unsafe_allow_html=True
             )
+
+        # -----------------------------
+        # AI ANSWER
+        # -----------------------------
 
         else:
 
             st.markdown(
-                f"""
-                <div style="
-                    margin-bottom:0.4rem;
-                    font-weight:600;
-                    color:#374151;
-                ">
-                    Answer
-                </div>
-
-                <div class="answer-card">
-                    {message["content"]}
-                </div>
-                """,
+                '<div class="message-label">Answer</div>',
                 unsafe_allow_html=True
             )
+
+            # IMPORTANT:
+            # Render the answer separately using Streamlit Markdown.
+            # This allows **bold**, bullets, numbered lists, etc.
+            # to render correctly instead of showing HTML tags.
+            with st.container(border=True):
+
+                st.markdown(
+                    message["content"]
+                )
 
 
 # =========================================================
@@ -537,7 +553,7 @@ if st.session_state.chunks:
                     st.session_state.index
                 )
 
-            # Save conversation
+            # Store question
             st.session_state.messages.append(
                 {
                     "role": "user",
@@ -545,6 +561,7 @@ if st.session_state.chunks:
                 }
             )
 
+            # Store answer
             st.session_state.messages.append(
                 {
                     "role": "assistant",
@@ -587,4 +604,3 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
