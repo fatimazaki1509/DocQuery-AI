@@ -435,21 +435,15 @@ if uploaded_file:
 
 if st.session_state.processed_file:
 
-    st.markdown(
-        f"""
-        <div class="document-card">
-            <div class="document-name">
-                {st.session_state.processed_file}
-            </div>
+    with st.container(border=True):
 
-            <div class="document-status">
-                Document processed and ready for questions
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+        st.markdown(
+            f"**{st.session_state.processed_file}**"
+        )
 
+        st.caption(
+            "Document processed and ready for questions"
+        )
 
 # =========================================================
 # CONVERSATION HISTORY
